@@ -6,6 +6,13 @@ import os
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 if _current_dir not in sys.path:
     sys.path.append(_current_dir)
+# Also add the parent directory just in case Vercel's root is /var/task
+_parent_dir = os.path.dirname(_current_dir)
+if _parent_dir not in sys.path:
+    sys.path.append(_parent_dir)
+
+print(f"Python path: {sys.path}")
+print(f"Current dir content: {os.listdir(_current_dir)}")
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,13 +56,20 @@ class ValidationResponse(BaseModel):
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
-@app.get("/api/index")
-@app.get("/api/index/")
+@app.get("/api/main")
+@app.get("/api/main/")
 def health_check():
-    return {"status": "ok", "message": "Quore AGS API is running"}
+    return {
+        "status": "ok", 
+        "message": "Quore AGS API is running",
+        "cwd": os.getcwd(),
+        "file": __file__,
+        "sys_path": sys.path
+    }
 
 @app.post("/validate")
 @app.post("/api/validate")
+@app.post("/api/main/validate")
 @app.post("/api/index/validate", response_model=ValidationResponse)
 async def validate_ags_file(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
@@ -89,6 +103,7 @@ async def validate_ags_file(file: UploadFile = File(...)):
 
 @app.post("/convert/to-excel")
 @app.post("/api/convert/to-excel")
+@app.post("/api/main/convert/to-excel")
 @app.post("/api/index/convert/to-excel")
 async def convert_to_excel(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
@@ -116,6 +131,7 @@ async def convert_to_excel(file: UploadFile = File(...)):
 
 @app.post("/convert/to-ags")
 @app.post("/api/convert/to-ags")
+@app.post("/api/main/convert/to-ags")
 @app.post("/api/index/convert/to-ags")
 async def convert_to_ags(file: UploadFile = File(...)):
     if not file.filename.endswith('.xlsx'):
@@ -141,6 +157,7 @@ async def convert_to_ags(file: UploadFile = File(...)):
 
 @app.post("/parse")
 @app.post("/api/parse")
+@app.post("/api/main/parse")
 @app.post("/api/index/parse")
 async def parse_ags_file(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
@@ -166,6 +183,7 @@ async def parse_ags_file(file: UploadFile = File(...)):
 
 @app.post("/save")
 @app.post("/api/save")
+@app.post("/api/main/save")
 @app.post("/api/index/save")
 async def save_ags_file(data: Dict[str, Any]):
     try:

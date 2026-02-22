@@ -145,38 +145,78 @@ def get_stratigraphy_data(filepath: str) -> dict:
         loca_df = tables.get('LOCA', pd.DataFrame())
         geol_df = tables.get('GEOL', pd.DataFrame())
         
+        # Clean dataframes
+        if not loca_df.empty:
+            loca_df = loca_df.fillna('')
+        if not geol_df.empty:
+            geol_df = geol_df.fillna('')
+
         holes = []
         if not loca_df.empty:
+            # Find the ID column - could be LOCA_ID or HOLE_ID depending on version
+            id_col = 'LOCA_ID' if 'LOCA_ID' in loca_df.columns else None
+            
+            if not id_col:
+                # Fallback to looking for any column containing ID
+                cols = [c for c in loca_df.columns if 'ID' in c.upper()]
+                if cols: id_col = cols[0]
+
+            if not id_col:
+                return {'holes': []}
+
             for _, row in loca_df.iterrows():
-                loca_id = row.get('LOCA_ID', '')
+                loca_id = str(row.get(id_col, '')).strip()
+                # Skip rows with no ID or rows that look like AGS meta (headers/units)
+                if not loca_id or loca_id.upper() in ['ID', 'TYPE', 'UNIT', 'DATA', id_col.upper()]:
+                    continue 
+                
                 try:
-                    depth = float(row.get('LOCA_FDEP', 0) or 0)
-                except ValueError:
+                    depth_val = row.get('LOCA_FDEP', 0)
+                    depth = float(depth_val) if depth_val and str(depth_val).strip() else 0
+                except (ValueError, TypeError):
                     depth = 0
                 
                 hole_geol = []
-                if not geol_df.empty and 'LOCA_ID' in geol_df.columns:
-                    hole_geol_df = geol_df[geol_df['LOCA_ID'] == loca_id]
+                # Find ID column in GEOL
+                geol_id_col = id_col if id_col in geol_df.columns else 'LOCA_ID'
+                
+                if not geol_df.empty and geol_id_col in geol_df.columns:
+                    # Filter geol rows for this hole
+                    hole_geol_df = geol_df[geol_df[geol_id_col].astype(str).str.strip() == loca_id]
+                    
                     for _, g_row in hole_geol_df.iterrows():
                         try:
                             # Safely cast depths
-                            top = float(g_row.get('GEOL_TOP', 0) or 0)
-                            base = float(g_row.get('GEOL_BASE', 0) or 0)
-                        except ValueError:
+                            top_val = g_row.get('GEOL_TOP', 0)
+                            base_val = g_row.get('GEOL_BASE', 0)
+                            top = float(top_val) if top_val and str(top_val).strip() else 0
+                            base = float(base_val) if base_val and str(base_val).strip() else 0
+                        except (ValueError, TypeError):
                             top, base = 0, 0
-                            
-                        hole_geol.append({
-                            'top': top,
-                            'bottom': base,
-                            'description': str(g_row.get('GEOL_DESC', '')),
-                            'legend': str(g_row.get('GEOL_LEG', ''))
-                        })
+                        
+                        # Only add if it has some meat (base > top or has desc)
+                        desc = str(g_row.get('GEOL_DESC', '')).strip()
+                        legend = str(g_row.get('GEOL_LEG', '')).strip()
+                        
+                        if base > top or desc or legend:
+                            hole_geol.append({
+                                'top': top,
+                                'bottom': base,
+                                'description': desc,
+                                'legend': legend
+                            })
+                
+                # Sort geology by depth
+                hole_geol.sort(key=lambda x: x['top'])
                 
                 holes.append({
-                    'id': str(loca_id),
-                    'max_depth': depth,
+                    'id': loca_id,
+                    'max_depth': depth or (hole_geol[-1]['bottom'] if hole_geol else 0),
                     'geology': hole_geol
                 })
+        
+        # Finally, sort holes by ID
+        holes.sort(key=lambda x: x['id'])
         return {'holes': holes}
     except Exception as e:
         return {"error": str(e)}

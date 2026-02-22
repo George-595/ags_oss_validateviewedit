@@ -25,7 +25,12 @@ const getColorForLegend = (legend: string) => {
 
 export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
     const { holes } = data;
-    const [selectedHoleId, setSelectedHoleId] = useState<string>(holes.length > 0 ? holes.find(h => h.geology.length > 0)?.id || holes[0].id : "");
+    // Initial selection: prefer a hole that actually has geology data
+    const [selectedHoleId, setSelectedHoleId] = useState<string>(() => {
+        if (!holes || holes.length === 0) return "";
+        const holeWithGeol = holes.find(h => h.geology && h.geology.length > 0);
+        return holeWithGeol ? holeWithGeol.id : holes[0].id;
+    });
 
     if (!holes || holes.length === 0) {
         return (
@@ -37,7 +42,7 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
     }
 
     const selectedHole = holes.find(h => h.id === selectedHoleId) || holes[0];
-    const maxDepth = selectedHole.max_depth || selectedHole.geology.reduce((max, g) => Math.max(max, g.bottom), 0) || 10;
+    const maxDepth = selectedHole.max_depth || (selectedHole.geology && selectedHole.geology.length > 0 ? selectedHole.geology.reduce((max, g) => Math.max(max, g.bottom), 0) : 10);
 
     // Pixels per meter scale for rendering
     const scale = 50;
@@ -46,15 +51,15 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
     const containerHeight = Math.max(600, maxDepth * scale);
 
     return (
-        <div className="w-full flex flex-col space-y-6 bg-white/5 border border-white/10 rounded-3xl p-8 relative z-10 backdrop-blur-md">
+        <div className="w-full flex flex-col space-y-6 bg-white/5 border border-white/10 rounded-3xl p-6 sm:p-8 relative z-10 backdrop-blur-md">
 
             {/* Tab selector for Boreholes */}
-            <div className="flex space-x-2 overflow-x-auto pb-4 custom-scrollbar border-b border-white/10">
+            <div className="flex flex-wrap gap-2 pb-4 border-b border-white/10">
                 {holes.map((hole) => (
                     <button
                         key={hole.id}
                         onClick={() => setSelectedHoleId(hole.id)}
-                        className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap flex flex-col items-start ${selectedHoleId === hole.id
+                        className={`px-4 py-2 rounded-xl text-left transition-all flex flex-col min-w-[120px] ${selectedHoleId === hole.id
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105'
                             : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:scale-105'
                             }`}

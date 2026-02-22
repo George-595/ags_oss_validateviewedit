@@ -7,6 +7,10 @@ const withPWA = withPWAInit({
     skipWaiting: true,
 });
 
-const nextConfig = {};
+const nextConfig = {
+    experimental: {
+        turbopack: {},
+    },
+};
 
 export default withPWA(nextConfig);

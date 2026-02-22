@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileUp, Loader2, RefreshCw, Download } from "lucide-react";
+import { FileUp, Loader2, RefreshCw, Download, ExternalLink } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { ValidationResults } from "@/components/ValidationResults";
 import { AgsEditor } from "@/components/AgsEditor";
@@ -155,6 +155,7 @@ export default function LandingPage() {
           >
             <span className="flex h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]"></span>
             Powered by Quore Geotechnical
+            <ExternalLink className="w-3.5 h-3.5 ml-2 opacity-70" />
           </a>
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight bg-gradient-to-br from-white to-white/40 bg-clip-text text-transparent">
             AGS Data Validator.

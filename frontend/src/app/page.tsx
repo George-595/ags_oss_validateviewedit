@@ -88,12 +88,13 @@ export default function LandingPage() {
       setResults(data);
       setParsedData(parseData.parsed_data);
       setStratigraphy(parseData.stratigraphy);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setResults({
         is_valid: false,
         file_hash: "",
-        errors: [`Failed to connect to validation engine: ${err.message || 'Unknown error'}`],
+        errors: [`Failed to connect to validation engine: ${errorMessage}`],
         warnings: [],
         metadata: {}
       });

@@ -39,13 +39,11 @@ def validate_file(filepath: str) -> dict:
         is_valid = True
         
         if error_report:
-           is_valid = False
            if isinstance(error_report, dict):
                for rule, item_list in error_report.items():
-                   # The keys are things like "AGS Format Rule 19a" or "Summary of data"
-                   # The values are often lists of dicts, e.g. [{'line': 2, 'group': 'PROJ', 'desc': 'Error'}]
-                   if rule.startswith("Summary of data") or rule.startswith("Metadata"):
-                       continue # Skip these from the error table
+                   # Skip metadata and summary from the main issues list
+                   if rule.lower().startswith(("summary of data", "metadata")):
+                       continue
                        
                    if isinstance(item_list, list):
                        for item in item_list:
@@ -53,9 +51,14 @@ def validate_file(filepath: str) -> dict:
                                desc = item.get('desc', '')
                                group = item.get('group', 'General')
                                line = item.get('line', '')
+                               
+                               # Better classification based on BGS patterns
                                msg = f"[{group}{' Line ' + str(line) if str(line) and str(line) != '-' else ''}] {rule}: {desc}"
                                
-                               if "Warning" in rule or "warning" in desc.lower():
+                               is_fyi = "fyi" in rule.lower() or "fyi" in desc.lower() or "information" in desc.lower()
+                               is_warning = "warning" in rule.lower() or "warning" in desc.lower()
+                               
+                               if is_fyi or is_warning:
                                    warnings.append(msg)
                                else:
                                    errors.append(msg)
@@ -66,10 +69,44 @@ def validate_file(filepath: str) -> dict:
            else:
                errors.append(str(error_report))
 
-        # Check if valid despite issues (warnings only)
-        if not errors and warnings:
-             is_valid = True
-             
+        # BGS Specific Validation Rules
+        if tables:
+            # 1. Required Groups (TYPE, UNIT)
+            required_groups = ['TYPE', 'UNIT']
+            missing_groups = [g for g in required_groups if g not in tables or tables[g].empty]
+            if missing_groups:
+                errors.append(f"[BGS] Required groups missing: {', '.join(missing_groups)}")
+
+            # 2. Easting/Northing checks in LOCA
+            if 'LOCA' in tables:
+                loca_df = tables['LOCA']
+                for idx, row in loca_df.iterrows():
+                    loca_id = str(row.get('LOCA_ID', f'Row {idx+1}')).strip()
+                    # Skip rows that are not data (some parsers might include headers as rows if they failed)
+                    if not loca_id or loca_id.upper() in ['ID', 'TYPE', 'UNIT', 'DATA']:
+                        continue
+                        
+                    # check NATE and NATN
+                    nate = str(row.get('LOCA_NATE', '')).strip()
+                    natn = str(row.get('LOCA_NATN', '')).strip()
+                    
+                    if not nate or nate == '0' or nate == '0.0' or not natn or natn == '0' or natn == '0.0':
+                        errors.append(f"[LOCA {loca_id}] BGS: LOCA_NATE / LOCA_NATN contains zeros or null values")
+
+                # 3. Spatial Referencing
+                spatial_fields = ['LOCA_GREF', 'LOCA_LREF', 'LOCA_LLZ']
+                has_spatial = False
+                for field in spatial_fields:
+                    if field in loca_df.columns and not loca_df[field].replace('', pd.NA).dropna().empty:
+                        has_spatial = True
+                        break
+                if not has_spatial:
+                    errors.append("[BGS] Spatial referencing system not in LOCA_GREF, LOCA_LREF or LOCA_LLZ")
+
+        # Set final validity
+        if errors:
+            is_valid = False
+              
         return {
             "is_valid": is_valid,
             "errors": errors,

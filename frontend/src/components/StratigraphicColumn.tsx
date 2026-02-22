@@ -97,11 +97,7 @@ export function StratigraphicColumn({ data, selectedHoleId, onSelectHole }: Stra
     // Calculate total height needed
     const containerHeight = Math.max(600, maxDepth * scale);
 
-    const hasExtraData = (selectedHole.samples && selectedHole.samples.length > 0) ||
-        (selectedHole.spts && selectedHole.spts.length > 0) ||
-        (selectedHole.water && selectedHole.water.length > 0) ||
-        (selectedHole.casings && selectedHole.casings.length > 0) ||
-        (selectedHole.lab && selectedHole.lab.length > 0);
+
 
     return (
         <div className="w-full flex flex-col space-y-6 bg-white/5 border border-white/10 rounded-3xl p-6 sm:p-8 relative z-10 backdrop-blur-md">
@@ -146,12 +142,16 @@ export function StratigraphicColumn({ data, selectedHoleId, onSelectHole }: Stra
                     {/* Column 1: Stratigraphy and Samples */}
                     <div className="flex justify-center bg-black/40 rounded-2xl p-8 border border-white/5 relative overflow-y-auto custom-scrollbar h-[600px]">
                         <div className="relative border-x border-white/20 w-[120px] sm:w-[150px] bg-[#1a1a1a] shadow-2xl rounded-sm shrink-0" style={{ height: `${containerHeight}px` }}>
-                            {/* Depth axis markers */}
-                            <div className="absolute -left-10 top-0 bottom-0 w-10 border-r border-white/10 flex flex-col">
+                            {/* Depth axis markers and grid lines */}
+                            <div className="absolute -left-12 top-0 bottom-0 w-12 flex flex-col pointer-events-none z-10">
                                 {Array.from({ length: Math.ceil(maxDepth) + 1 }).map((_, i) => (
-                                    <div key={i} className="absolute right-0 text-[10px] text-zinc-500 pr-2 -translate-y-1/2" style={{ top: `${i * scale}px` }}>
-                                        {i}m
-                                    </div>
+                                    <React.Fragment key={`grid-${i}`}>
+                                        <div className="absolute right-2 text-[10px] text-zinc-500 font-medium -translate-y-1/2" style={{ top: `${i * scale}px` }}>
+                                            {i}m
+                                        </div>
+                                        {/* Grid line passing through the column */}
+                                        <div className="absolute left-12 w-[120px] sm:w-[150px] border-t border-white/20 border-dashed z-40 mix-blend-overlay" style={{ top: `${i * scale}px` }} />
+                                    </React.Fragment>
                                 ))}
                             </div>
 
@@ -162,17 +162,40 @@ export function StratigraphicColumn({ data, selectedHoleId, onSelectHole }: Stra
                                 return (
                                     <div
                                         key={idx}
-                                        className="absolute left-0 w-full flex items-center justify-center overflow-hidden border-b border-white/10 group cursor-pointer transition-all hover:z-20 hover:scale-105 shadow-lg"
+                                        className="absolute left-0 w-full flex items-center justify-center overflow-hidden border-b border-black/20 group cursor-pointer transition-all hover:z-20 hover:scale-[1.02] shadow-lg"
                                         style={{
                                             top: `${topPos}px`,
                                             height: `${height}px`,
                                             backgroundColor: getColorForLegend(layer.legend)
                                         }}
-                                        title={layer.description}
                                     >
-                                        <span className="text-white/90 font-bold tracking-wider text-[10px] sm:text-xs pointer-events-none drop-shadow-md">
-                                            {layer.legend}
-                                        </span>
+                                        {/* 3D Cylindrical Overlay */}
+                                        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-white/5 to-black/40 pointer-events-none mix-blend-overlay" />
+                                        <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+
+                                        {/* Smart text rendering: show text only if height is reasonable */}
+                                        {height > 15 && (
+                                            <span className="text-white/90 font-bold tracking-wider text-[10px] sm:text-xs pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] z-10 px-1 truncate w-full text-center">
+                                                {layer.legend}
+                                            </span>
+                                        )}
+
+                                        {/* Custom Floating Tooltip */}
+                                        <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 pointer-events-none w-64 translate-x-2 group-hover:translate-x-0">
+                                            <div className="bg-zinc-900/95 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-2xl relative text-left">
+                                                <div className="absolute top-1/2 -left-[8px] -translate-y-1/2 w-0 h-0 border-y-[8px] border-y-transparent border-r-[8px] border-r-white/10" />
+                                                <div className="absolute top-1/2 -left-[7px] -translate-y-1/2 w-0 h-0 border-y-[7px] border-y-transparent border-r-[7px] border-r-zinc-900/95" />
+
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="w-3 h-3 rounded-sm shadow-sm border border-white/20" style={{ backgroundColor: getColorForLegend(layer.legend) }} />
+                                                    <span className="font-bold text-white text-xs truncate">{layer.legend}</span>
+                                                    <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-zinc-300 ml-auto whitespace-nowrap">{layer.top.toFixed(2)}m - {layer.bottom.toFixed(2)}m</span>
+                                                </div>
+                                                <p className="text-[11px] text-zinc-300 leading-relaxed break-words whitespace-pre-wrap">
+                                                    {layer.description}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -194,11 +217,15 @@ export function StratigraphicColumn({ data, selectedHoleId, onSelectHole }: Stra
                             {selectedHole.samples?.map((samp, idx) => (
                                 <div
                                     key={`samp-${idx}`}
-                                    className="absolute -right-2 w-4 h-4 rounded-full bg-white border-2 border-blue-600 shadow-md flex items-center justify-center group/samp cursor-help z-30"
+                                    className="absolute -right-3 w-6 h-6 rounded-full bg-zinc-900 border-2 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] flex items-center justify-center group/samp cursor-help z-30 transition-transform hover:scale-125 hover:z-50"
                                     style={{ top: `${samp.top * scale}px`, transform: 'translateY(-50%)' }}
                                 >
-                                    <div className="absolute left-6 bg-blue-900 border border-blue-400 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/samp:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-blue-300">
-                                        {samp.type} ({samp.ref})
+                                    <div className="w-2 h-2 rounded-full bg-blue-400" />
+                                    <div className="absolute left-8 bg-zinc-900/95 backdrop-blur-md border border-white/10 text-white text-[11px] px-3 py-2 rounded-xl opacity-0 group-hover/samp:opacity-100 transition-all whitespace-nowrap z-50 pointer-events-none shadow-xl shadow-blue-900/20 translate-y-1 group-hover/samp:translate-y-0 text-left">
+                                        <div className="absolute top-1/2 -left-[6px] -translate-y-1/2 w-0 h-0 border-y-[6px] border-y-transparent border-r-[6px] border-r-white/10" />
+                                        <div className="absolute top-1/2 -left-[5px] -translate-y-1/2 w-0 h-0 border-y-[5px] border-y-transparent border-r-[5px] border-r-zinc-900/95" />
+                                        <div className="font-bold text-blue-400 mb-0.5">{samp.type}</div>
+                                        <div className="text-zinc-300">Ref: {samp.ref}</div>
                                     </div>
                                 </div>
                             ))}
@@ -207,12 +234,15 @@ export function StratigraphicColumn({ data, selectedHoleId, onSelectHole }: Stra
                             {selectedHole.water?.map((strike, idx) => (
                                 <div
                                     key={`water-${idx}`}
-                                    className="absolute -left-6 text-blue-400 z-30 group/water cursor-help drop-shadow-[0_0_5px_rgba(59,130,246,0.5)]"
+                                    className="absolute -left-7 text-blue-400 z-30 group/water cursor-help drop-shadow-[0_0_8px_rgba(59,130,246,0.6)] hover:scale-125 transition-transform hover:z-50"
                                     style={{ top: `${strike.depth * scale}px`, transform: 'translateY(-50%)' }}
                                 >
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.5c-3.5 0-6.5-3-6.5-6.5 0-2 1-4.5 3-7.5l3.5-5.5 3.5 5.5c2 3 3 5.5 3 7.5 0 3.5-3 6.5-6.5 6.5z" /></svg>
-                                    <div className="absolute right-6 bg-blue-600 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/water:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-blue-300">
-                                        Strike: {strike.depth}m {strike.time && `at ${strike.time}`}
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.5c-3.5 0-6.5-3-6.5-6.5 0-2 1-4.5 3-7.5l3.5-5.5 3.5 5.5c2 3 3 5.5 3 7.5 0 3.5-3 6.5-6.5 6.5z" /></svg>
+                                    <div className="absolute right-8 bg-zinc-900/95 backdrop-blur-md border border-blue-500/30 text-white text-[11px] px-3 py-2 rounded-xl opacity-0 group-hover/water:opacity-100 transition-all whitespace-nowrap z-50 pointer-events-none shadow-xl shadow-blue-900/20 translate-y-1 group-hover/water:translate-y-0 text-left">
+                                        <div className="absolute top-1/2 -right-[6px] -translate-y-1/2 w-0 h-0 border-y-[6px] border-y-transparent border-l-[6px] border-l-blue-500/30" />
+                                        <div className="absolute top-1/2 -right-[5px] -translate-y-1/2 w-0 h-0 border-y-[5px] border-y-transparent border-l-[5px] border-l-zinc-900/95" />
+                                        <div className="font-bold text-blue-400 mb-0.5">Water Strike @ {strike.depth.toFixed(2)}m</div>
+                                        {strike.time && <div className="text-zinc-300 text-[10px]">Time: {strike.time}</div>}
                                     </div>
                                 </div>
                             ))}
@@ -221,10 +251,10 @@ export function StratigraphicColumn({ data, selectedHoleId, onSelectHole }: Stra
                             {selectedHole.spts?.map((spt, idx) => (
                                 <div
                                     key={`spt-${idx}`}
-                                    className="absolute -right-12 text-blue-400 font-bold text-[10px] flex items-center group/spt cursor-help z-30"
+                                    className="absolute -right-14 text-emerald-400 font-bold text-[11px] flex items-center group/spt cursor-help z-30 drop-shadow-[0_0_5px_rgba(16,185,129,0.4)] hover:scale-110 transition-transform bg-black/40 px-1.5 py-0.5 rounded border border-emerald-500/20"
                                     style={{ top: `${spt.top * scale}px`, transform: 'translateY(-50%)' }}
                                 >
-                                    <div className="w-2 h-[1px] bg-blue-500/50 mr-1" />
+                                    <div className="absolute left-0 -translate-x-full w-4 h-[1px] bg-emerald-500/50" />
                                     N={spt.n_value}
                                 </div>
                             ))}
@@ -278,10 +308,12 @@ export function StratigraphicColumn({ data, selectedHoleId, onSelectHole }: Stra
                 </div>
 
                 {/* Legend and Details */}
-                <div className={`grid grid-cols-1 ${hasExtraData ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-8`}>
-                    <h3 className="text-2xl font-bold text-white mb-2">Detailed Log: <span className="text-blue-400">{selectedHole.id}</span></h3>
+                <div className="flex flex-col lg:flex-row gap-8 mt-4 bg-black/40 rounded-2xl p-6 sm:p-8 border border-white/5">
+                    <div className="w-full lg:w-1/4 shrink-0">
+                        <h3 className="text-2xl font-bold text-white mb-2 sticky top-0">Detailed Log: <span className="text-blue-400 block mt-1">{selectedHole.id}</span></h3>
+                    </div>
 
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3" style={{ maxHeight: '700px' }}>
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4" style={{ maxHeight: '700px' }}>
                         {/* Summary Stats */}
                         <div className="flex flex-wrap gap-4 mb-6">
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex-1 min-w-[150px]">

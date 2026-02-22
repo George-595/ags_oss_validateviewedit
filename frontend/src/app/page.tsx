@@ -7,6 +7,8 @@ import { useDropzone } from "react-dropzone";
 import { ValidationResults } from "@/components/ValidationResults";
 import { AgsEditor } from "@/components/AgsEditor";
 import { StratigraphicColumn } from "@/components/StratigraphicColumn";
+import { ProjectDashboard } from "@/components/ProjectDashboard";
+import { SitePlan } from "@/components/SitePlan";
 
 interface ValidationData {
   is_valid: boolean;
@@ -20,14 +22,61 @@ interface ValidationData {
 }
 
 interface StratigraphyData {
+  project: {
+    name: string;
+    client: string;
+    contractor: string;
+    date: string;
+    ags_version: string;
+  };
+  summary: {
+    total_holes: number;
+    total_depth: number;
+  };
   holes: Array<{
     id: string;
     max_depth: number;
+    east: number | null;
+    north: number | null;
+    orientation?: {
+      inclination: number;
+      azimuth: number;
+    };
     geology: Array<{
       top: number;
       bottom: number;
       description: string;
       legend: string;
+    }>;
+    samples?: Array<{
+      top: number;
+      type: string;
+      ref: string;
+      id: string;
+    }>;
+    spts?: Array<{
+      top: number;
+      n_value: string;
+      n_numeric: number | null;
+    }>;
+    water?: Array<{
+      depth: number;
+      time: string;
+      remarks: string;
+    }>;
+    casings?: Array<{
+      depth: number;
+      diameter: number;
+    }>;
+    lab?: Array<{
+      depth: number;
+      type: 'LL' | 'PL' | 'MC';
+      value: number;
+    }>;
+    weathering?: Array<{
+      top: number;
+      bottom: number;
+      desc: string;
     }>;
   }>;
 }
@@ -40,6 +89,7 @@ export default function LandingPage() {
   const [stratigraphy, setStratigraphy] = useState<StratigraphyData | null>(null);
   const [activeTab, setActiveTab] = useState<'validate' | 'edit' | 'stratigraphy'>('validate');
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedHoleId, setSelectedHoleId] = useState<string>("");
 
   const onDrop = (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -87,7 +137,15 @@ export default function LandingPage() {
 
       setResults(data);
       setParsedData(parseData.parsed_data);
-      setStratigraphy(parseData.stratigraphy);
+
+      const strat = parseData.stratigraphy as StratigraphyData;
+      setStratigraphy(strat);
+
+      // Auto-select first hole or first with geology
+      if (strat.holes.length > 0) {
+        const holeWithGeol = strat.holes.find(h => h.geology && h.geology.length > 0);
+        setSelectedHoleId(holeWithGeol ? holeWithGeol.id : strat.holes[0].id);
+      }
     } catch (err: unknown) {
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -102,14 +160,6 @@ export default function LandingPage() {
       setIsUploading(false);
     }
   };
-
-  // Connectivity check on mount
-  useState(() => {
-    fetch(`${API_BASE}/api/`)
-      .then(r => r.json())
-      .then(data => console.log("API Status:", data))
-      .catch(e => console.error("API Connection check failed:", e));
-  });
 
   const handleExportToExcel = async () => {
     if (!file) return;
@@ -148,7 +198,7 @@ export default function LandingPage() {
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/20 blur-[120px] rounded-full point-events-none" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-violet-600/20 blur-[120px] rounded-full point-events-none" />
 
-      <div className="z-10 w-full max-w-4xl mx-auto flex flex-col items-center space-y-12">
+      <div className="z-10 w-full max-w-6xl mx-auto flex flex-col items-center space-y-12">
 
         {/* Header Section */}
         <motion.div
@@ -257,14 +307,26 @@ export default function LandingPage() {
                     : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:scale-105 border border-white/10'
                     }`}
                 >
-                  View Stratigraphic Column
+                  Geotechnical Dashboard
                 </button>
               </div>
 
               <div className="w-full relative min-h-[400px]">
                 {activeTab === 'validate' && <ValidationResults results={results} />}
                 {activeTab === 'edit' && parsedData && file && <AgsEditor initialData={parsedData} filename={file.name} />}
-                {activeTab === 'stratigraphy' && stratigraphy && <StratigraphicColumn data={stratigraphy} />}
+                {activeTab === 'stratigraphy' && stratigraphy && (
+                  <div className="flex flex-col space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <ProjectDashboard project={stratigraphy.project} summary={stratigraphy.summary} />
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      <div className="lg:col-span-1">
+                        <SitePlan holes={stratigraphy.holes} selectedHoleId={selectedHoleId} onSelectHole={setSelectedHoleId} />
+                      </div>
+                      <div className="lg:col-span-2">
+                        <StratigraphicColumn data={stratigraphy} selectedHoleId={selectedHoleId} onSelectHole={setSelectedHoleId} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-12 mb-20 relative z-10 w-full">

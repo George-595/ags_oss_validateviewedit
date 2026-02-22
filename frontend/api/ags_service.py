@@ -176,9 +176,30 @@ def save_parsed_data(data: dict, output_filepath: str):
         raise Exception(f"Failed to save AGS: {str(e)}")
 
 def get_stratigraphy_data(filepath: str) -> dict:
-    """Extracts LOCA and GEOL data for stratigraphic column rendering."""
+    """Extracts project-wide metadata and borehole-specific data for visualization."""
     try:
         tables, headings = AGS4.AGS4_to_dataframe(filepath)
+        
+        # 1. Extract Project Metadata (PROJ & TRAN)
+        project_info = {
+            'name': 'Unknown Project',
+            'client': 'Unknown Client',
+            'contractor': 'Unknown Contractor',
+            'date': '',
+            'ags_version': '4.x'
+        }
+        
+        if 'PROJ' in tables and not tables['PROJ'].empty:
+            proj_df = tables['PROJ'].fillna('')
+            project_info['name'] = str(proj_df.get('PROJ_NAME', pd.Series(['Unknown'])).iloc[0])
+            project_info['client'] = str(proj_df.get('PROJ_CLNT', pd.Series(['Unknown'])).iloc[0])
+            project_info['contractor'] = str(proj_df.get('PROJ_CONT', pd.Series(['Unknown'])).iloc[0])
+
+        if 'TRAN' in tables and not tables['TRAN'].empty:
+            tran_df = tables['TRAN'].fillna('')
+            project_info['ags_version'] = str(tran_df.get('TRAN_AGS', pd.Series(['4.0'])).iloc[0])
+            project_info['date'] = str(tran_df.get('TRAN_DATE', pd.Series([''])).iloc[0])
+
         loca_df = tables.get('LOCA', pd.DataFrame())
         geol_df = tables.get('GEOL', pd.DataFrame())
         samp_df = tables.get('SAMP', pd.DataFrame())
@@ -186,9 +207,14 @@ def get_stratigraphy_data(filepath: str) -> dict:
         wstd_df = tables.get('WSTD', pd.DataFrame())
         cdia_df = tables.get('CDIA', pd.DataFrame())
         hdia_df = tables.get('HDIA', pd.DataFrame())
+        llpl_df = tables.get('LLPL', pd.DataFrame())
+        lnmc_df = tables.get('LNMC', pd.DataFrame())
+        weth_df = tables.get('WETH', pd.DataFrame())
+        disc_df = tables.get('DISC', pd.DataFrame())
+        horn_df = tables.get('HORN', pd.DataFrame())
         
         # Clean dataframes
-        for df in [loca_df, geol_df, samp_df, ispt_df, wstd_df, cdia_df, hdia_df]:
+        for df in [loca_df, geol_df, samp_df, ispt_df, wstd_df, cdia_df, hdia_df, llpl_df, lnmc_df, weth_df, disc_df, horn_df]:
             if not df.empty:
                 df.fillna('', inplace=True)
 
@@ -211,8 +237,13 @@ def get_stratigraphy_data(filepath: str) -> dict:
                 try:
                     depth_val = row.get('LOCA_FDEP', 0)
                     depth = float(depth_val) if depth_val and str(depth_val).strip() else 0
+                    # Extract Coordinates
+                    east = row.get('LOCA_NATE', '')
+                    north = row.get('LOCA_NATN', '')
+                    east = float(east) if str(east).strip() else None
+                    north = float(north) if str(north).strip() else None
                 except (ValueError, TypeError):
-                    depth = 0
+                    depth, east, north = 0, None, None
                 
                 # Extract Geology
                 hole_geol = []
@@ -249,10 +280,14 @@ def get_stratigraphy_data(filepath: str) -> dict:
                     for _, i_row in hole_ispt_df.iterrows():
                         try:
                             i_top = float(i_row.get('ISPT_TOP', 0) or 0)
-                            n_val = i_row.get('ISPT_NVAL', '')
+                            n_val = str(i_row.get('ISPT_NVAL', '')).strip()
+                            try:
+                                n_num = float(n_val) if n_val else None
+                            except (ValueError, TypeError):
+                                n_num = None
                         except (ValueError, TypeError):
-                            i_top, n_val = 0, ''
-                        hole_spts.append({'top': i_top, 'n_value': str(n_val).strip()})
+                            i_top, n_val, n_num = 0, '', None
+                        hole_spts.append({'top': i_top, 'n_value': n_val, 'n_numeric': n_num})
                 hole_spts.sort(key=lambda x: x['top'])
 
                 # Extract Water Strikes (WSTD)
@@ -300,19 +335,90 @@ def get_stratigraphy_data(filepath: str) -> dict:
                         hole_dias.append({'depth': h_depth, 'diameter': h_dia})
                 hole_dias.sort(key=lambda x: x['depth'])
 
+                # Extract Lab Tests (LLPL & LNMC)
+                hole_lab = []
+                # Simple heuristic: moisture content is very common
+                lnmc_id_col = id_col if id_col in lnmc_df.columns else 'LOCA_ID'
+                if not lnmc_df.empty and lnmc_id_col in lnmc_df.columns:
+                    hole_lnmc_df = lnmc_df[lnmc_df[lnmc_id_col].astype(str).str.strip() == loca_id]
+                    for _, m_row in hole_lnmc_df.iterrows():
+                        try:
+                            m_depth = float(m_row.get('SAMP_TOP', 0) or 0)
+                            m_val = float(m_row.get('LNMC_MC', 0) or 0)
+                        except (ValueError, TypeError):
+                            continue
+                        hole_lab.append({'depth': m_depth, 'type': 'MC', 'value': m_val})
+
+                llpl_id_col = id_col if id_col in llpl_df.columns else 'LOCA_ID'
+                if not llpl_df.empty and llpl_id_col in llpl_df.columns:
+                    hole_llpl_df = llpl_df[llpl_df[llpl_id_col].astype(str).str.strip() == loca_id]
+                    for _, l_row in hole_llpl_df.iterrows():
+                        try:
+                            l_depth = float(l_row.get('SAMP_TOP', 0) or 0)
+                            ll = float(l_row.get('LLPL_LL', 0) or 0)
+                            pl = float(l_row.get('LLPL_PL', 0) or 0)
+                        except (ValueError, TypeError):
+                            continue
+                        if ll: hole_lab.append({'depth': l_depth, 'type': 'LL', 'value': ll})
+                        if pl: hole_lab.append({'depth': l_depth, 'type': 'PL', 'value': pl})
+                
+                hole_lab.sort(key=lambda x: x['depth'])
+
+                # Extract Weathering (WETH)
+                hole_weth = []
+                weth_id_col = id_col if id_col in weth_df.columns else 'LOCA_ID'
+                if not weth_df.empty and weth_id_col in weth_df.columns:
+                    hole_weth_df = weth_df[weth_df[weth_id_col].astype(str).str.strip() == loca_id]
+                    for _, wt_row in hole_weth_df.iterrows():
+                        try:
+                            wt_top = float(wt_row.get('WETH_TOP', 0) or 0)
+                            wt_base = float(wt_row.get('WETH_BASE', 0) or 0)
+                        except (ValueError, TypeError):
+                            wt_top, wt_base = 0, 0
+                        hole_weth.append({
+                            'top': wt_top,
+                            'bottom': wt_base,
+                            'desc': str(wt_row.get('WETH_DESC', wt_row.get('WETH_WETH', ''))).strip()
+                        })
+
+                # Extract Orientation (HORN) - use first record usually
+                orientation = {'inclination': 90, 'azimuth': 0}
+                horn_id_col = id_col if id_col in horn_df.columns else 'LOCA_ID'
+                if not horn_df.empty and horn_id_col in horn_df.columns:
+                    hole_horn_df = horn_df[horn_df[horn_id_col].astype(str).str.strip() == loca_id]
+                    if not hole_horn_df.empty:
+                        try:
+                            h_row = hole_horn_df.iloc[0]
+                            orientation['inclination'] = float(h_row.get('HORN_INC', 90) or 90)
+                            orientation['azimuth'] = float(h_row.get('HORN_AZI', 0) or 0)
+                        except (ValueError, TypeError):
+                            pass
+
                 holes.append({
                     'id': loca_id,
                     'max_depth': depth or (hole_geol[-1]['bottom'] if hole_geol else 0),
+                    'east': east,
+                    'north': north,
+                    'orientation': orientation,
                     'geology': hole_geol,
                     'samples': hole_samples,
                     'spts': hole_spts,
                     'water': hole_water,
                     'casings': hole_casings,
-                    'diameters': hole_dias
+                    'diameters': hole_dias,
+                    'lab': hole_lab,
+                    'weathering': hole_weth
                 })
         
         holes.sort(key=lambda x: x['id'])
-        return {'holes': holes}
+        return {
+            'project': project_info,
+            'summary': {
+                'total_holes': len(holes),
+                'total_depth': sum(h['max_depth'] for h in holes)
+            },
+            'holes': holes
+        }
     except Exception as e:
         return {"error": str(e)}
 

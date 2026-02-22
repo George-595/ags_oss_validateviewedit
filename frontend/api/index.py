@@ -1,13 +1,21 @@
+import sys
+import os
+
+# Add current directory to sys.path for Vercel deployment
+# This allows 'import ags_service' to work regardless of how Vercel invokes the function
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+if _current_dir not in sys.path:
+    sys.path.append(_current_dir)
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import os
 import shutil
 import tempfile
 import hashlib
 from pydantic import BaseModel
 from typing import Dict, Any, List
 
-# We will implement the actual logic in ags_service.py
+# Now we can import our local service
 import ags_service
 
 app = FastAPI(title="Quore AGS Validator API", version="0.1.0")
@@ -41,11 +49,14 @@ class ValidationResponse(BaseModel):
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
+@app.get("/api/index")
+@app.get("/api/index/")
 def health_check():
     return {"status": "ok", "message": "Quore AGS API is running"}
 
 @app.post("/validate")
-@app.post("/api/validate", response_model=ValidationResponse)
+@app.post("/api/validate")
+@app.post("/api/index/validate", response_model=ValidationResponse)
 async def validate_ags_file(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
         raise HTTPException(status_code=400, detail="Must be an .ags file")
@@ -78,6 +89,7 @@ async def validate_ags_file(file: UploadFile = File(...)):
 
 @app.post("/convert/to-excel")
 @app.post("/api/convert/to-excel")
+@app.post("/api/index/convert/to-excel")
 async def convert_to_excel(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
         raise HTTPException(status_code=400, detail="Must be an .ags file")
@@ -104,6 +116,7 @@ async def convert_to_excel(file: UploadFile = File(...)):
 
 @app.post("/convert/to-ags")
 @app.post("/api/convert/to-ags")
+@app.post("/api/index/convert/to-ags")
 async def convert_to_ags(file: UploadFile = File(...)):
     if not file.filename.endswith('.xlsx'):
         raise HTTPException(status_code=400, detail="Must be an .xlsx file")
@@ -128,6 +141,7 @@ async def convert_to_ags(file: UploadFile = File(...)):
 
 @app.post("/parse")
 @app.post("/api/parse")
+@app.post("/api/index/parse")
 async def parse_ags_file(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
         raise HTTPException(status_code=400, detail="Must be an .ags file")
@@ -152,6 +166,7 @@ async def parse_ags_file(file: UploadFile = File(...)):
 
 @app.post("/save")
 @app.post("/api/save")
+@app.post("/api/index/save")
 async def save_ags_file(data: Dict[str, Any]):
     try:
         tables_data = data.get("tables", {})

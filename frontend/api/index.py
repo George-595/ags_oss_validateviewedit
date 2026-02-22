@@ -12,10 +12,20 @@ import ags_service
 
 app = FastAPI(title="Quore AGS Validator API", version="0.1.0")
 
-# Allow requests from Next.js frontend
+# Build allowed origins — includes localhost for dev, and Vercel domains for production
+_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
+# Allow the specific production frontend URL if set via env var
+_frontend_url = os.environ.get("FRONTEND_URL", "").strip()
+if _frontend_url:
+    _origins.append(_frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # covers all preview deployments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

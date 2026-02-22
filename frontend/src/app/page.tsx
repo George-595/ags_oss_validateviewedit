@@ -56,6 +56,10 @@ export default function LandingPage() {
     maxFiles: 1,
   });
 
+  // In production (Vercel), NEXT_PUBLIC_API_URL is unset → API_BASE is '' → relative URLs
+  // In local dev, set NEXT_PUBLIC_API_URL=http://localhost:8000 in .env.local
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+
   const handleValidation = async () => {
     if (!file) return;
     setIsUploading(true);
@@ -64,17 +68,19 @@ export default function LandingPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      // We will point to our FastAPI local backend when running.
       const [valRes, parseRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/validate`, {
+        fetch(`${API_BASE}/api/validate`, {
           method: "POST",
           body: formData,
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/parse`, {
+        fetch(`${API_BASE}/api/parse`, {
           method: "POST",
           body: formData,
         })
       ]);
+
+      if (!valRes.ok) throw new Error(`Validation failed: ${valRes.status}`);
+      if (!parseRes.ok) throw new Error(`Parse failed: ${parseRes.status}`);
 
       const data = await valRes.json();
       const parseData = await parseRes.json();
@@ -103,7 +109,7 @@ export default function LandingPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/convert/to-excel`, {
+      const res = await fetch(`${API_BASE}/api/convert/to-excel`, {
         method: "POST",
         body: formData,
       });

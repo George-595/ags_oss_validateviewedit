@@ -7,10 +7,25 @@ interface GeolRow {
     legend: string;
 }
 
+interface SampleRow {
+    top: number;
+    type: string;
+    ref: string;
+    id: string;
+}
+
+interface SptRow {
+    top: number;
+    n_value: string;
+    n_numeric: number | null;
+}
+
 interface Hole {
     id: string;
     max_depth: number;
     geology: GeolRow[];
+    samples?: SampleRow[];
+    spts?: SptRow[];
 }
 
 interface StratigraphicColumnProps {
@@ -50,6 +65,8 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
     // Calculate total height needed
     const containerHeight = Math.max(600, maxDepth * scale);
 
+    const hasExtraData = (selectedHole.samples && selectedHole.samples.length > 0) || (selectedHole.spts && selectedHole.spts.length > 0);
+
     return (
         <div className="w-full flex flex-col space-y-6 bg-white/5 border border-white/10 rounded-3xl p-6 sm:p-8 relative z-10 backdrop-blur-md">
 
@@ -70,13 +87,13 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                 ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
+            <div className={`grid grid-cols-1 ${hasExtraData ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-8 pt-4`}>
                 {/* Visual Log */}
                 <div className="col-span-1 flex justify-center bg-black/40 rounded-2xl p-8 border border-white/5 relative overflow-y-auto custom-scrollbar" style={{ maxHeight: '800px' }}>
 
-                    <div className="relative border-x border-white/20 w-[180px] bg-[#1a1a1a] shadow-2xl rounded-sm" style={{ height: `${containerHeight}px` }}>
+                    <div className="relative border-x border-white/20 w-[120px] sm:w-[150px] bg-[#1a1a1a] shadow-2xl rounded-sm" style={{ height: `${containerHeight}px` }}>
                         {/* Depth axis markers */}
-                        <div className="absolute -left-12 top-0 bottom-0 w-10 border-r border-white/10 flex flex-col">
+                        <div className="absolute -left-10 top-0 bottom-0 w-10 border-r border-white/10 flex flex-col">
                             {Array.from({ length: Math.ceil(maxDepth) + 1 }).map((_, i) => (
                                 <div key={i} className="absolute right-0 text-[10px] text-zinc-500 pr-2 -translate-y-1/2" style={{ top: `${i * scale}px` }}>
                                     {i}m
@@ -84,6 +101,7 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                             ))}
                         </div>
 
+                        {/* Geology layers */}
                         {selectedHole.geology.map((layer, idx) => {
                             const height = (layer.bottom - layer.top) * scale;
                             const topPos = layer.top * scale;
@@ -98,20 +116,67 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                                     }}
                                     title={layer.description}
                                 >
-                                    <span className="text-white/90 font-bold tracking-wider text-sm pointer-events-none drop-shadow-md">
+                                    <span className="text-white/90 font-bold tracking-wider text-[10px] sm:text-xs pointer-events-none drop-shadow-md">
                                         {layer.legend}
                                     </span>
                                 </div>
                             );
                         })}
+
+                        {/* Samples Overlay */}
+                        {selectedHole.samples?.map((samp, idx) => (
+                            <div
+                                key={`samp-${idx}`}
+                                className="absolute -right-2 w-4 h-4 rounded-full bg-white border-2 border-blue-600 shadow-md flex items-center justify-center group/samp cursor-help z-30"
+                                style={{ top: `${samp.top * scale}px`, transform: 'translateY(-50%)' }}
+                            >
+                                <div className="absolute left-6 bg-blue-900 border border-blue-400 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/samp:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                    {samp.type} ({samp.ref})
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* SPT Overlay */}
+                        {selectedHole.spts?.map((spt, idx) => (
+                            <div
+                                key={`spt-${idx}`}
+                                className="absolute -right-12 text-blue-400 font-bold text-[10px] flex items-center group/spt cursor-help"
+                                style={{ top: `${spt.top * scale}px`, transform: 'translateY(-50%)' }}
+                            >
+                                <div className="w-2 h-[1px] bg-blue-500/50 mr-1" />
+                                N={spt.n_value}
+                            </div>
+                        ))}
                     </div>
                 </div>
 
                 {/* Legend and Details */}
-                <div className="col-span-1 md:col-span-2 flex flex-col space-y-4">
+                <div className={`col-span-1 ${hasExtraData ? 'md:col-span-3' : 'md:col-span-2'} flex flex-col space-y-4`}>
                     <h3 className="text-2xl font-bold text-white mb-2">Detailed Log: <span className="text-blue-400">{selectedHole.id}</span></h3>
 
                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3" style={{ maxHeight: '700px' }}>
+                        {/* Summary Stats */}
+                        <div className="flex flex-wrap gap-4 mb-6">
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex-1 min-w-[150px]">
+                                <div className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Depth</div>
+                                <div className="text-xl font-bold text-white">{selectedHole.max_depth}m</div>
+                            </div>
+                            {selectedHole.samples && selectedHole.samples.length > 0 && (
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex-1 min-w-[150px]">
+                                    <div className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Samples</div>
+                                    <div className="text-xl font-bold text-blue-400">{selectedHole.samples.length}</div>
+                                </div>
+                            )}
+                            {selectedHole.spts && selectedHole.spts.length > 0 && (
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex-1 min-w-[150px]">
+                                    <div className="text-zinc-500 text-xs uppercase tracking-wider mb-1">SPT Tests</div>
+                                    <div className="text-xl font-bold text-indigo-400">{selectedHole.spts.length}</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Geology List */}
+                        <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-widest pt-4 mb-2">Lithology</h4>
                         {selectedHole.geology.length === 0 ? (
                             <div className="text-zinc-500 italic">No geology layers defined.</div>
                         ) : (
@@ -134,10 +199,27 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                                 </div>
                             ))
                         )}
+
+                        {/* Samples List */}
+                        {selectedHole.samples && selectedHole.samples.length > 0 && (
+                            <>
+                                <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-widest pt-6 mb-2">Samples</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {selectedHole.samples.map((samp, idx) => (
+                                        <div key={idx} className="bg-white/5 border border-blue-500/10 rounded-xl p-3 flex justify-between items-center group hover:bg-blue-500/5 transition-colors">
+                                            <div>
+                                                <div className="text-[10px] text-blue-400 font-bold uppercase">{samp.type}</div>
+                                                <div className="text-sm font-medium text-white">{samp.id || samp.ref || 'Unnamed'}</div>
+                                            </div>
+                                            <div className="text-xs text-zinc-500">{samp.top.toFixed(2)}m</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
-
         </div>
     );
 }

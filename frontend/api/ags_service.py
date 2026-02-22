@@ -144,20 +144,19 @@ def get_stratigraphy_data(filepath: str) -> dict:
         tables, headings = AGS4.AGS4_to_dataframe(filepath)
         loca_df = tables.get('LOCA', pd.DataFrame())
         geol_df = tables.get('GEOL', pd.DataFrame())
+        samp_df = tables.get('SAMP', pd.DataFrame())
+        ispt_df = tables.get('ISPT', pd.DataFrame())
         
         # Clean dataframes
-        if not loca_df.empty:
-            loca_df = loca_df.fillna('')
-        if not geol_df.empty:
-            geol_df = geol_df.fillna('')
+        for df in [loca_df, geol_df, samp_df, ispt_df]:
+            if not df.empty:
+                df.fillna('', inplace=True)
 
         holes = []
         if not loca_df.empty:
-            # Find the ID column - could be LOCA_ID or HOLE_ID depending on version
+            # Find the ID column
             id_col = 'LOCA_ID' if 'LOCA_ID' in loca_df.columns else None
-            
             if not id_col:
-                # Fallback to looking for any column containing ID
                 cols = [c for c in loca_df.columns if 'ID' in c.upper()]
                 if cols: id_col = cols[0]
 
@@ -166,7 +165,6 @@ def get_stratigraphy_data(filepath: str) -> dict:
 
             for _, row in loca_df.iterrows():
                 loca_id = str(row.get(id_col, '')).strip()
-                # Skip rows with no ID or rows that look like AGS meta (headers/units)
                 if not loca_id or loca_id.upper() in ['ID', 'TYPE', 'UNIT', 'DATA', id_col.upper()]:
                     continue 
                 
@@ -176,46 +174,71 @@ def get_stratigraphy_data(filepath: str) -> dict:
                 except (ValueError, TypeError):
                     depth = 0
                 
+                # Extract Geology
                 hole_geol = []
-                # Find ID column in GEOL
                 geol_id_col = id_col if id_col in geol_df.columns else 'LOCA_ID'
-                
                 if not geol_df.empty and geol_id_col in geol_df.columns:
-                    # Filter geol rows for this hole
                     hole_geol_df = geol_df[geol_df[geol_id_col].astype(str).str.strip() == loca_id]
-                    
                     for _, g_row in hole_geol_df.iterrows():
                         try:
-                            # Safely cast depths
-                            top_val = g_row.get('GEOL_TOP', 0)
-                            base_val = g_row.get('GEOL_BASE', 0)
-                            top = float(top_val) if top_val and str(top_val).strip() else 0
-                            base = float(base_val) if base_val and str(base_val).strip() else 0
+                            top = float(g_row.get('GEOL_TOP', 0) or 0)
+                            base = float(g_row.get('GEOL_BASE', 0) or 0)
                         except (ValueError, TypeError):
                             top, base = 0, 0
                         
-                        # Only add if it has some meat (base > top or has desc)
                         desc = str(g_row.get('GEOL_DESC', '')).strip()
                         legend = str(g_row.get('GEOL_LEG', '')).strip()
-                        
                         if base > top or desc or legend:
-                            hole_geol.append({
-                                'top': top,
-                                'bottom': base,
-                                'description': desc,
-                                'legend': legend
-                            })
-                
-                # Sort geology by depth
+                            hole_geol.append({'top': top, 'bottom': base, 'description': desc, 'legend': legend})
                 hole_geol.sort(key=lambda x: x['top'])
-                
+
+                # Extract Samples (SAMP)
+                hole_samples = []
+                samp_id_col = id_col if id_col in samp_df.columns else 'LOCA_ID'
+                if not samp_df.empty and samp_id_col in samp_df.columns:
+                    hole_samp_df = samp_df[samp_df[samp_id_col].astype(str).str.strip() == loca_id]
+                    for _, s_row in hole_samp_df.iterrows():
+                        try:
+                            s_top = float(s_row.get('SAMP_TOP', 0) or 0)
+                        except (ValueError, TypeError):
+                            s_top = 0
+                        hole_samples.append({
+                            'top': s_top,
+                            'type': str(s_row.get('SAMP_TYPE', '')).strip(),
+                            'ref': str(s_row.get('SAMP_REF', '')).strip(),
+                            'id': str(s_row.get('SAMP_ID', '')).strip()
+                        })
+                hole_samples.sort(key=lambda x: x['top'])
+
+                # Extract SPT Tests (ISPT)
+                hole_spts = []
+                ispt_id_col = id_col if id_col in ispt_df.columns else 'LOCA_ID'
+                if not ispt_df.empty and ispt_id_col in ispt_df.columns:
+                    hole_ispt_df = ispt_df[ispt_df[ispt_id_col].astype(str).str.strip() == loca_id]
+                    for _, i_row in hole_ispt_df.iterrows():
+                        try:
+                            i_top = float(i_row.get('ISPT_TOP', 0) or 0)
+                            n_val = i_row.get('ISPT_NVAL', '')
+                            # Many ISPT_NVAL are stars/notes, try to get a number
+                            n_num = float(n_val) if str(n_val).isdigit() else None
+                        except (ValueError, TypeError):
+                            i_top, n_num = 0, None
+                        
+                        hole_spts.append({
+                            'top': i_top,
+                            'n_value': str(n_val).strip(),
+                            'n_numeric': n_num
+                        })
+                hole_spts.sort(key=lambda x: x['top'])
+
                 holes.append({
                     'id': loca_id,
                     'max_depth': depth or (hole_geol[-1]['bottom'] if hole_geol else 0),
-                    'geology': hole_geol
+                    'geology': hole_geol,
+                    'samples': hole_samples,
+                    'spts': hole_spts
                 })
         
-        # Finally, sort holes by ID
         holes.sort(key=lambda x: x['id'])
         return {'holes': holes}
     except Exception as e:

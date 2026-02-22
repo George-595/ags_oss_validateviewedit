@@ -9,6 +9,14 @@ const withPWA = withPWAInit({
 
 const nextConfig = {
     turbopack: {},
+    async rewrites() {
+        return [
+            {
+                source: '/api/:path*',
+                destination: '/api/index',
+            },
+        ];
+    },
 };
 
 export default withPWA(nextConfig);

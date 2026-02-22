@@ -39,9 +39,12 @@ class ValidationResponse(BaseModel):
     metadata: Dict[str, Any]
 
 @app.get("/")
+@app.get("/api")
+@app.get("/api/")
 def health_check():
     return {"status": "ok", "message": "Quore AGS API is running"}
 
+@app.post("/validate")
 @app.post("/api/validate", response_model=ValidationResponse)
 async def validate_ags_file(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
@@ -73,6 +76,7 @@ async def validate_ags_file(file: UploadFile = File(...)):
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+@app.post("/convert/to-excel")
 @app.post("/api/convert/to-excel")
 async def convert_to_excel(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
@@ -98,6 +102,7 @@ async def convert_to_excel(file: UploadFile = File(...)):
              os.remove(tmp_path)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/convert/to-ags")
 @app.post("/api/convert/to-ags")
 async def convert_to_ags(file: UploadFile = File(...)):
     if not file.filename.endswith('.xlsx'):
@@ -121,6 +126,7 @@ async def convert_to_ags(file: UploadFile = File(...)):
              os.remove(tmp_path)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/parse")
 @app.post("/api/parse")
 async def parse_ags_file(file: UploadFile = File(...)):
     if not file.filename.endswith('.ags'):
@@ -144,6 +150,7 @@ async def parse_ags_file(file: UploadFile = File(...)):
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+@app.post("/save")
 @app.post("/api/save")
 async def save_ags_file(data: Dict[str, Any]):
     try:
@@ -161,6 +168,10 @@ async def save_ags_file(data: Dict[str, Any]):
                             background=ags_service.cleanup_task(tmp_path, tmp_path))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def catch_all(path_name: str):
+    return {"error": "Path not found", "path": path_name}
 
 if __name__ == "__main__":
     import uvicorn

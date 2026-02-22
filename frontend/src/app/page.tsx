@@ -88,12 +88,12 @@ export default function LandingPage() {
       setResults(data);
       setParsedData(parseData.parsed_data);
       setStratigraphy(parseData.stratigraphy);
-    } catch (e) {
-      console.error(e);
+    } catch (err: any) {
+      console.error(err);
       setResults({
         is_valid: false,
         file_hash: "",
-        errors: ["Failed to connect to validation engine."],
+        errors: [`Failed to connect to validation engine: ${err.message || 'Unknown error'}`],
         warnings: [],
         metadata: {}
       });
@@ -101,6 +101,14 @@ export default function LandingPage() {
       setIsUploading(false);
     }
   };
+
+  // Connectivity check on mount
+  useState(() => {
+    fetch(`${API_BASE}/api/`)
+      .then(r => r.json())
+      .then(data => console.log("API Status:", data))
+      .catch(e => console.error("API Connection check failed:", e));
+  });
 
   const handleExportToExcel = async () => {
     if (!file) return;

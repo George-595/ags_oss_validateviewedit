@@ -26,10 +26,11 @@ def validate_file(filepath: str) -> dict:
         metadata = {}
         if tables and 'TRAN' in tables and not tables['TRAN'].empty:
             tran_df = tables['TRAN']
+            tran_data = tran_df[tran_df.get('HEADING', '') == 'DATA'] if 'HEADING' in tran_df.columns else tran_df
+            first_tran = tran_data.iloc[0] if not tran_data.empty else tran_df.iloc[-1]
             # extract basic info if exists
-            metadata['version'] = tran_df.get('TRAN_AGS', pd.Series(['Unknown'])).iloc[0]
-            metadata['producer'] = tran_df.get('TRAN_PROD', pd.Series(['Unknown'])).iloc[0]
-            
+            metadata['version'] = str(first_tran.get('TRAN_AGS', 'Unknown'))
+            metadata['producer'] = str(first_tran.get('TRAN_PROD', 'Unknown'))
             
         # Using basic check_file for errors
         error_report = AGS4.check_file(filepath)
@@ -191,14 +192,18 @@ def get_stratigraphy_data(filepath: str) -> dict:
         
         if 'PROJ' in tables and not tables['PROJ'].empty:
             proj_df = tables['PROJ'].fillna('')
-            project_info['name'] = str(proj_df.get('PROJ_NAME', pd.Series(['Unknown'])).iloc[0])
-            project_info['client'] = str(proj_df.get('PROJ_CLNT', pd.Series(['Unknown'])).iloc[0])
-            project_info['contractor'] = str(proj_df.get('PROJ_CONT', pd.Series(['Unknown'])).iloc[0])
+            proj_data = proj_df[proj_df.get('HEADING', '') == 'DATA'] if 'HEADING' in proj_df.columns else proj_df
+            first_proj = proj_data.iloc[0] if not proj_data.empty else proj_df.iloc[-1]
+            project_info['name'] = str(first_proj.get('PROJ_NAME', 'Unknown Project'))
+            project_info['client'] = str(first_proj.get('PROJ_CLNT', 'Unknown Client'))
+            project_info['contractor'] = str(first_proj.get('PROJ_CONT', 'Unknown Contractor'))
 
         if 'TRAN' in tables and not tables['TRAN'].empty:
             tran_df = tables['TRAN'].fillna('')
-            project_info['ags_version'] = str(tran_df.get('TRAN_AGS', pd.Series(['4.0'])).iloc[0])
-            project_info['date'] = str(tran_df.get('TRAN_DATE', pd.Series([''])).iloc[0])
+            tran_data = tran_df[tran_df.get('HEADING', '') == 'DATA'] if 'HEADING' in tran_df.columns else tran_df
+            first_tran = tran_data.iloc[0] if not tran_data.empty else tran_df.iloc[-1]
+            project_info['ags_version'] = str(first_tran.get('TRAN_AGS', '4.0'))
+            project_info['date'] = str(first_tran.get('TRAN_DATE', ''))
 
         loca_df = tables.get('LOCA', pd.DataFrame())
         geol_df = tables.get('GEOL', pd.DataFrame())

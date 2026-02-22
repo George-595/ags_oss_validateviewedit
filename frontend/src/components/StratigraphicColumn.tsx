@@ -20,12 +20,31 @@ interface SptRow {
     n_numeric: number | null;
 }
 
+interface WaterRow {
+    depth: number;
+    time: string;
+    remarks: string;
+}
+
+interface CasingRow {
+    depth: number;
+    diameter: number;
+}
+
+interface DiameterRow {
+    depth: number;
+    diameter: number;
+}
+
 interface Hole {
     id: string;
     max_depth: number;
     geology: GeolRow[];
     samples?: SampleRow[];
     spts?: SptRow[];
+    water?: WaterRow[];
+    casings?: CasingRow[];
+    diameters?: DiameterRow[];
 }
 
 interface StratigraphicColumnProps {
@@ -65,7 +84,10 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
     // Calculate total height needed
     const containerHeight = Math.max(600, maxDepth * scale);
 
-    const hasExtraData = (selectedHole.samples && selectedHole.samples.length > 0) || (selectedHole.spts && selectedHole.spts.length > 0);
+    const hasExtraData = (selectedHole.samples && selectedHole.samples.length > 0) ||
+        (selectedHole.spts && selectedHole.spts.length > 0) ||
+        (selectedHole.water && selectedHole.water.length > 0) ||
+        (selectedHole.casings && selectedHole.casings.length > 0);
 
     return (
         <div className="w-full flex flex-col space-y-6 bg-white/5 border border-white/10 rounded-3xl p-6 sm:p-8 relative z-10 backdrop-blur-md">
@@ -123,6 +145,19 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                             );
                         })}
 
+                        {/* Casings Overlay */}
+                        {selectedHole.casings?.map((casing, idx) => (
+                            <div
+                                key={`casing-${idx}`}
+                                className="absolute left-1/2 -translate-x-1/2 border-x-2 border-zinc-400/50 z-20 pointer-events-none"
+                                style={{
+                                    top: 0,
+                                    height: `${casing.depth * scale}px`,
+                                    width: `${Math.min(100, (casing.diameter / 200) * 100)}%`
+                                }}
+                            />
+                        ))}
+
                         {/* Samples Overlay */}
                         {selectedHole.samples?.map((samp, idx) => (
                             <div
@@ -130,8 +165,22 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                                 className="absolute -right-2 w-4 h-4 rounded-full bg-white border-2 border-blue-600 shadow-md flex items-center justify-center group/samp cursor-help z-30"
                                 style={{ top: `${samp.top * scale}px`, transform: 'translateY(-50%)' }}
                             >
-                                <div className="absolute left-6 bg-blue-900 border border-blue-400 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/samp:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                <div className="absolute left-6 bg-blue-900 border border-blue-400 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/samp:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
                                     {samp.type} ({samp.ref})
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Water Strikes Overlay */}
+                        {selectedHole.water?.map((strike, idx) => (
+                            <div
+                                key={`water-${idx}`}
+                                className="absolute -left-6 text-blue-400 z-30 group/water cursor-help drop-shadow-[0_0_5px_rgba(59,130,246,0.5)]"
+                                style={{ top: `${strike.depth * scale}px`, transform: 'translateY(-50%)' }}
+                            >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.5c-3.5 0-6.5-3-6.5-6.5 0-2 1-4.5 3-7.5l3.5-5.5 3.5 5.5c2 3 3 5.5 3 7.5 0 3.5-3 6.5-6.5 6.5z" /></svg>
+                                <div className="absolute right-6 bg-blue-600 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/water:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none border border-blue-300">
+                                    Strike: {strike.depth}m {strike.time && `at ${strike.time}`}
                                 </div>
                             </div>
                         ))}
@@ -140,7 +189,7 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                         {selectedHole.spts?.map((spt, idx) => (
                             <div
                                 key={`spt-${idx}`}
-                                className="absolute -right-12 text-blue-400 font-bold text-[10px] flex items-center group/spt cursor-help"
+                                className="absolute -right-12 text-blue-400 font-bold text-[10px] flex items-center group/spt cursor-help z-30"
                                 style={{ top: `${spt.top * scale}px`, transform: 'translateY(-50%)' }}
                             >
                                 <div className="w-2 h-[1px] bg-blue-500/50 mr-1" />
@@ -167,13 +216,44 @@ export function StratigraphicColumn({ data }: StratigraphicColumnProps) {
                                     <div className="text-xl font-bold text-blue-400">{selectedHole.samples.length}</div>
                                 </div>
                             )}
-                            {selectedHole.spts && selectedHole.spts.length > 0 && (
+                            {selectedHole.water && selectedHole.water.length > 0 && (
                                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex-1 min-w-[150px]">
-                                    <div className="text-zinc-500 text-xs uppercase tracking-wider mb-1">SPT Tests</div>
-                                    <div className="text-xl font-bold text-indigo-400">{selectedHole.spts.length}</div>
+                                    <div className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Water Strikes</div>
+                                    <div className="text-xl font-bold text-blue-300">{selectedHole.water.length}</div>
                                 </div>
                             )}
                         </div>
+
+                        {/* Construction & Water Section */}
+                        {((selectedHole.water && selectedHole.water.length > 0) || (selectedHole.casings && selectedHole.casings.length > 0)) && (
+                            <>
+                                <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-widest pt-4 mb-2">Construction & Water</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                                    {selectedHole.water?.map((strike, idx) => (
+                                        <div key={`wbtn-${idx}`} className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex gap-3 items-center">
+                                            <div className="text-blue-400 shrink-0">
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.5c-3.5 0-6.5-3-6.5-6.5 0-2 1-4.5 3-7.5l3.5-5.5 3.5 5.5c2 3 3 5.5 3 7.5 0 3.5-3 6.5-6.5 6.5z" /></svg>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-blue-300 font-bold">Water Strike at {strike.depth.toFixed(2)}m</div>
+                                                <div className="text-[10px] text-zinc-400">{strike.time} {strike.remarks}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {selectedHole.casings?.map((casing, idx) => (
+                                        <div key={`cbtn-${idx}`} className="bg-zinc-500/5 border border-zinc-500/20 rounded-xl p-3 flex gap-3 items-center">
+                                            <div className="text-zinc-400 shrink-0">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-zinc-300 font-bold">Casing to {casing.depth.toFixed(2)}m</div>
+                                                <div className="text-[10px] text-zinc-400">Dia: {casing.diameter}mm</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
 
                         {/* Geology List */}
                         <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-widest pt-4 mb-2">Lithology</h4>

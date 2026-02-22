@@ -146,9 +146,12 @@ def get_stratigraphy_data(filepath: str) -> dict:
         geol_df = tables.get('GEOL', pd.DataFrame())
         samp_df = tables.get('SAMP', pd.DataFrame())
         ispt_df = tables.get('ISPT', pd.DataFrame())
+        wstd_df = tables.get('WSTD', pd.DataFrame())
+        cdia_df = tables.get('CDIA', pd.DataFrame())
+        hdia_df = tables.get('HDIA', pd.DataFrame())
         
         # Clean dataframes
-        for df in [loca_df, geol_df, samp_df, ispt_df]:
+        for df in [loca_df, geol_df, samp_df, ispt_df, wstd_df, cdia_df, hdia_df]:
             if not df.empty:
                 df.fillna('', inplace=True)
 
@@ -185,11 +188,7 @@ def get_stratigraphy_data(filepath: str) -> dict:
                             base = float(g_row.get('GEOL_BASE', 0) or 0)
                         except (ValueError, TypeError):
                             top, base = 0, 0
-                        
-                        desc = str(g_row.get('GEOL_DESC', '')).strip()
-                        legend = str(g_row.get('GEOL_LEG', '')).strip()
-                        if base > top or desc or legend:
-                            hole_geol.append({'top': top, 'bottom': base, 'description': desc, 'legend': legend})
+                        hole_geol.append({'top': top, 'bottom': base, 'description': str(g_row.get('GEOL_DESC', '')).strip(), 'legend': str(g_row.get('GEOL_LEG', '')).strip()})
                 hole_geol.sort(key=lambda x: x['top'])
 
                 # Extract Samples (SAMP)
@@ -202,12 +201,7 @@ def get_stratigraphy_data(filepath: str) -> dict:
                             s_top = float(s_row.get('SAMP_TOP', 0) or 0)
                         except (ValueError, TypeError):
                             s_top = 0
-                        hole_samples.append({
-                            'top': s_top,
-                            'type': str(s_row.get('SAMP_TYPE', '')).strip(),
-                            'ref': str(s_row.get('SAMP_REF', '')).strip(),
-                            'id': str(s_row.get('SAMP_ID', '')).strip()
-                        })
+                        hole_samples.append({'top': s_top, 'type': str(s_row.get('SAMP_TYPE', '')).strip(), 'ref': str(s_row.get('SAMP_REF', '')).strip(), 'id': str(s_row.get('SAMP_ID', '')).strip()})
                 hole_samples.sort(key=lambda x: x['top'])
 
                 # Extract SPT Tests (ISPT)
@@ -219,24 +213,65 @@ def get_stratigraphy_data(filepath: str) -> dict:
                         try:
                             i_top = float(i_row.get('ISPT_TOP', 0) or 0)
                             n_val = i_row.get('ISPT_NVAL', '')
-                            # Many ISPT_NVAL are stars/notes, try to get a number
-                            n_num = float(n_val) if str(n_val).isdigit() else None
                         except (ValueError, TypeError):
-                            i_top, n_num = 0, None
-                        
-                        hole_spts.append({
-                            'top': i_top,
-                            'n_value': str(n_val).strip(),
-                            'n_numeric': n_num
-                        })
+                            i_top, n_val = 0, ''
+                        hole_spts.append({'top': i_top, 'n_value': str(n_val).strip()})
                 hole_spts.sort(key=lambda x: x['top'])
+
+                # Extract Water Strikes (WSTD)
+                hole_water = []
+                wstd_id_col = id_col if id_col in wstd_df.columns else 'LOCA_ID'
+                if not wstd_df.empty and wstd_id_col in wstd_df.columns:
+                    hole_wstd_df = wstd_df[wstd_df[wstd_id_col].astype(str).str.strip() == loca_id]
+                    for _, w_row in hole_wstd_df.iterrows():
+                        try:
+                            w_depth = float(w_row.get('WSTD_DEP', 0) or 0)
+                        except (ValueError, TypeError):
+                            w_depth = 0
+                        hole_water.append({
+                            'depth': w_depth,
+                            'time': str(w_row.get('WSTD_TIME', '')).strip(),
+                            'remarks': str(w_row.get('WSTD_REM', '')).strip()
+                        })
+                hole_water.sort(key=lambda x: x['depth'])
+
+                # Extract Casings (CDIA)
+                hole_casings = []
+                cdia_id_col = id_col if id_col in cdia_df.columns else 'LOCA_ID'
+                if not cdia_df.empty and cdia_id_col in cdia_df.columns:
+                    hole_cdia_df = cdia_df[cdia_df[cdia_id_col].astype(str).str.strip() == loca_id]
+                    for _, c_row in hole_cdia_df.iterrows():
+                        try:
+                            c_depth = float(c_row.get('CDIA_DEP', 0) or 0)
+                            c_dia = float(c_row.get('CDIA_DIA', 0) or 0)
+                        except (ValueError, TypeError):
+                            c_depth, c_dia = 0, 0
+                        hole_casings.append({'depth': c_depth, 'diameter': c_dia})
+                hole_casings.sort(key=lambda x: x['depth'])
+
+                # Extract Hole Diameters (HDIA)
+                hole_dias = []
+                hdia_id_col = id_col if id_col in hdia_df.columns else 'LOCA_ID'
+                if not hdia_df.empty and hdia_id_col in hdia_df.columns:
+                    hole_hdia_df = hdia_df[hdia_df[hdia_id_col].astype(str).str.strip() == loca_id]
+                    for _, h_row in hole_hdia_df.iterrows():
+                        try:
+                            h_depth = float(h_row.get('HDIA_DEP', 0) or 0)
+                            h_dia = float(h_row.get('HDIA_DIA', 0) or 0)
+                        except (ValueError, TypeError):
+                            h_depth, h_dia = 0, 0
+                        hole_dias.append({'depth': h_depth, 'diameter': h_dia})
+                hole_dias.sort(key=lambda x: x['depth'])
 
                 holes.append({
                     'id': loca_id,
                     'max_depth': depth or (hole_geol[-1]['bottom'] if hole_geol else 0),
                     'geology': hole_geol,
                     'samples': hole_samples,
-                    'spts': hole_spts
+                    'spts': hole_spts,
+                    'water': hole_water,
+                    'casings': hole_casings,
+                    'diameters': hole_dias
                 })
         
         holes.sort(key=lambda x: x['id'])
